@@ -7,6 +7,8 @@ KaufmannDigital:
     # Supports exact IPs and CIDR notation (IPv4 and IPv6).
     # Note: checked against Flow's client IP. Behind a reverse proxy this is the proxy address unless the proxy is listed in
     # Neos.Flow.http.trustedProxies.proxies (or FLOW_HTTP_TRUSTED_PROXIES). Never trust all proxies ('*'): the address becomes spoofable.
+    # With trusted proxies only public client addresses are recognised; requests with a private/unknown client address are
+    # denied. Do not allowlist the proxy address itself in that case.
     #
     # Common ranges to add in Development/Settings.yaml:
     #   '127.0.0.1'        — localhost IPv4

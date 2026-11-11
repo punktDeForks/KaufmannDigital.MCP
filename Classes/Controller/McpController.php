@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace KaufmannDigital\MCP\Controller;
 
 use KaufmannDigital\MCP\Mcp\McpHandler;
+use KaufmannDigital\MCP\Security\ClientIpResolver;
 use KaufmannDigital\MCP\Security\IpAllowlist;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Http\Helper\MediaTypeHelper;
-use Neos\Flow\Http\ServerRequestAttributes;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Flow\Mvc\ActionResponse;
 use Neos\Flow\Mvc\Controller\ActionController;
@@ -45,16 +45,8 @@ class McpController extends ActionController
     {
         // IP allowlist check (before token to fail fast).
         // Empty list = block all. Must explicitly allow IPs or CIDRs.
-        // Flow's client IP is the directly connected address unless trusted proxies are configured
-        // (Neos.Flow.http.trustedProxies), in which case the real client address behind them is used.
-        $httpRequest = $this->request->getHttpRequest();
-        $clientIp = $httpRequest->getAttribute(ServerRequestAttributes::CLIENT_IP);
-        if ($clientIp === null) {
-            // The attribute is only missing if the trusted proxies middleware did not run. It is false if Flow could not
-            // determine a client address — that must not fall back to the (possibly allowlisted) proxy address.
-            $clientIp = $httpRequest->getServerParams()['REMOTE_ADDR'] ?? '';
-        }
-        $clientIp = (string)$clientIp;
+        // The directly connected address, or the client behind trusted proxies (Neos.Flow.http.trustedProxies)
+        $clientIp = ClientIpResolver::resolve($this->request->getHttpRequest());
         if (!IpAllowlist::isAllowed($clientIp, (array)$this->allowedIps)) {
             $this->throwStatus(403, 'Forbidden');
         }
