@@ -15,6 +15,7 @@ use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Domain\Service\NodeTypeManager;
 use Neos\Flow\Configuration\ConfigurationManager;
+use KaufmannDigital\MCP\Tests\Unit\TestDimensionConfiguration;
 use Neos\Flow\Tests\FunctionalTestCase;
 
 /**
@@ -34,7 +35,7 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->applyDimensionConfiguration($this->testDimensionConfiguration());
+        $this->applyDimensionConfiguration(TestDimensionConfiguration::get());
         $this->contextFactory = $this->objectManager->get(ContextFactoryInterface::class);
         $workspaceRepository = $this->objectManager->get(WorkspaceRepository::class);
         $workspaceRepository->add(new Workspace('live'));
@@ -107,44 +108,6 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
         $this->contextFactory->reset();
         $this->persistenceManager->clearState();
         $this->sourceContext = $this->createContext(['region' => ['north'], 'language' => ['de']]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function testDimensionConfiguration(): array
-    {
-        return [
-            'region' => [
-                'default' => 'north',
-                'defaultPreset' => 'north',
-                'label' => 'Region',
-                'presets' => [
-                    'north' => [
-                        'label' => 'North',
-                        'values' => ['north'],
-                        'uriSegment' => 'north',
-                        'constraints' => ['language' => ['*' => false, 'de' => true, 'en' => true]],
-                    ],
-                    'south' => [
-                        'label' => 'South',
-                        'values' => ['south'],
-                        'uriSegment' => 'south',
-                        'constraints' => ['language' => ['*' => false, 'de' => true]],
-                    ],
-                ],
-            ],
-            'language' => [
-                'default' => 'de',
-                'defaultPreset' => 'de',
-                'label' => 'Language',
-                'presets' => [
-                    'de' => ['label' => 'German', 'values' => ['de'], 'uriSegment' => 'de'],
-                    'en' => ['label' => 'English', 'values' => ['en'], 'uriSegment' => 'en'],
-                    'fr' => ['label' => 'French', 'values' => ['fr'], 'uriSegment' => 'fr'],
-                ],
-            ],
-        ];
     }
 
     /**
