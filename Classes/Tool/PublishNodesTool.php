@@ -14,6 +14,8 @@ use Neos\Neos\Service\PublishingService;
  */
 class PublishNodesTool implements ToolInterface
 {
+    use DimensionOverrideTrait;
+
     /**
      * @Flow\Inject
      * @var ContentContextFactory
@@ -36,7 +38,7 @@ class PublishNodesTool implements ToolInterface
     {
         return [
             'name' => 'publish_nodes',
-            'description' => 'Publish nodes from a user workspace to its base workspace (usually live).',
+            'description' => 'Publish nodes from a user workspace to its base workspace (usually live). Nodes are resolved in the default dimensions unless "dimensions" is given — pass it to publish variants in other dimensions. Publishing a document also publishes its content children; sub-documents must be listed explicitly.',
             'inputSchema' => [
                 'type' => 'object',
                 'properties' => [
@@ -46,6 +48,7 @@ class PublishNodesTool implements ToolInterface
                         'description' => 'UUIDs of the nodes to publish',
                     ],
                     'workspaceName' => ['type' => 'string', 'description' => 'Source workspace containing the unpublished nodes'],
+                    'dimensions' => $this->dimensionsInputSchema(),
                     'responseProperties' => [
                         'type' => 'array',
                         'items' => ['type' => 'string'],
@@ -63,11 +66,11 @@ class PublishNodesTool implements ToolInterface
             return [['type' => 'text', 'text' => 'Error: nodeIdentifiers and workspaceName are required']];
         }
 
-        $context = $this->contentContextFactory->create([
+        $context = $this->contentContextFactory->create(array_merge([
             'workspaceName' => $args['workspaceName'],
             'invisibleContentShown' => true,
             'inaccessibleContentShown' => true,
-        ]);
+        ], $this->dimensionContextProperties($args['dimensions'] ?? null)));
 
         $published = [];
         $errors = [];
