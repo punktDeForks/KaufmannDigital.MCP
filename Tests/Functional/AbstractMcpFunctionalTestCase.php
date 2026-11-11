@@ -10,8 +10,8 @@ use Neos\ContentRepository\Domain\Model\Workspace;
 use Neos\ContentRepository\Domain\Repository\ContentDimensionRepository;
 use Neos\ContentRepository\Domain\Repository\NodeDataRepository;
 use Neos\ContentRepository\Domain\Repository\WorkspaceRepository;
-use Neos\ContentRepository\Domain\Service\ConfigurationContentDimensionPresetSource;
 use Neos\ContentRepository\Domain\Service\Context;
+use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\ContentRepository\Domain\Service\NodeTypeManager;
 use Neos\Flow\Configuration\ConfigurationManager;
@@ -116,6 +116,9 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
     private function applyDimensionConfiguration(array $configuration): void
     {
         $this->objectManager->get(ContentDimensionRepository::class)->setDimensionsConfiguration($configuration);
-        $this->objectManager->get(ConfigurationContentDimensionPresetSource::class)->setConfiguration($configuration);
+        // Use the implementation bound to the interface: an installation may replace the default preset source
+        $presetSource = $this->objectManager->get(ContentDimensionPresetSourceInterface::class);
+        self::assertTrue(method_exists($presetSource, 'setConfiguration'), get_class($presetSource) . ' does not offer setConfiguration()');
+        $presetSource->setConfiguration($configuration);
     }
 }
