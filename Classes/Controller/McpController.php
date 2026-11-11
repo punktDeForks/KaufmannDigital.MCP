@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace KaufmannDigital\MCP\Controller;
 
 use KaufmannDigital\MCP\Mcp\McpHandler;
+use KaufmannDigital\MCP\Security\IpAllowlist;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Http\Helper\MediaTypeHelper;
+use Neos\Flow\Http\ServerRequestAttributes;
 use Neos\Flow\Mvc\ActionRequest;
 use Neos\Flow\Mvc\ActionResponse;
 use Neos\Flow\Mvc\Controller\ActionController;
@@ -43,8 +45,17 @@ class McpController extends ActionController
     {
         // IP allowlist check (before token to fail fast).
         // Empty list = block all. Must explicitly allow IPs or CIDRs.
-        $remoteIp = $this->request->getHttpRequest()->getServerParams()['REMOTE_ADDR'] ?? '';
-        if (!$this->isIpAllowed($remoteIp)) {
+        // Flow's client IP is the directly connected address unless trusted proxies are configured
+        // (Neos.Flow.http.trustedProxies), in which case the real client address behind them is used.
+        $httpRequest = $this->request->getHttpRequest();
+        $clientIp = $httpRequest->getAttribute(ServerRequestAttributes::CLIENT_IP);
+        if ($clientIp === null) {
+            // The attribute is only missing if the trusted proxies middleware did not run. It is false if Flow could not
+            // determine a client address — that must not fall back to the (possibly allowlisted) proxy address.
+            $clientIp = $httpRequest->getServerParams()['REMOTE_ADDR'] ?? '';
+        }
+        $clientIp = (string)$clientIp;
+        if (!IpAllowlist::isAllowed($clientIp, (array)$this->allowedIps)) {
             $this->throwStatus(403, 'Forbidden');
         }
 
@@ -100,49 +111,5 @@ class McpController extends ActionController
     protected function toJson(mixed $data): string
     {
         return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
-
-    private function isIpAllowed(string $remoteIp): bool
-    {
-        if (empty($this->allowedIps)) {
-            return false;
-        }
-
-        foreach ($this->allowedIps as $entry) {
-            if (str_contains($entry, '/')) {
-                if ($this->ipMatchesCidr($remoteIp, $entry)) {
-                    return true;
-                }
-            } elseif ($remoteIp === $entry) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function ipMatchesCidr(string $ip, string $cidr): bool
-    {
-        [$subnet, $prefixLen] = explode('/', $cidr, 2);
-        $prefixLen = (int)$prefixLen;
-
-        $ipBin = inet_pton($ip);
-        $subnetBin = inet_pton($subnet);
-
-        if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin)) {
-            return false;
-        }
-
-        $byteLen = strlen($ipBin);
-        $fullBytes = intdiv($prefixLen, 8);
-        $remainder = $prefixLen % 8;
-
-        $mask = str_repeat("\xff", $fullBytes);
-        if ($remainder > 0) {
-            $mask .= chr(0xff & (0xff << (8 - $remainder)));
-        }
-        $mask = str_pad($mask, $byteLen, "\x00");
-
-        return ($ipBin & $mask) === ($subnetBin & $mask);
     }
 }
