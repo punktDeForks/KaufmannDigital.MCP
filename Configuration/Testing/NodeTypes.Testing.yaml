@@ -1,0 +1,22 @@
+'KaufmannDigital.MCP:Testing.Document':
+  superTypes:
+    'Neos.Neos:Document': true
+  childNodes:
+    main:
+      type: 'KaufmannDigital.MCP:Testing.Collection'
+
+# Explicit constraint so the tests do not depend on constraints that a host project adds to Neos.Neos:ContentCollection
+'KaufmannDigital.MCP:Testing.Collection':
+  superTypes:
+    'Neos.Neos:ContentCollection': true
+  constraints:
+    nodeTypes:
+      '*': false
+      'KaufmannDigital.MCP:Testing.Text': true
+
+'KaufmannDigital.MCP:Testing.Text':
+  superTypes:
+    'Neos.Neos:Content': true
+  properties:
+    text:
+      type: string
