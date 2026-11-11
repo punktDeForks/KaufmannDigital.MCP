@@ -58,6 +58,8 @@ KaufmannDigital:
 > **`allowedIps` is required — an empty list blocks all requests (deny by default).**
 > Supports exact IPs and CIDR notation for both IPv4 and IPv6.
 >
+> **Behind a reverse proxy:** the allowlist is checked against Flow's client IP. Without trusted proxies this is the directly connected address, i.e. the proxy's address. To check the real client address, configure the proxies Flow should trust (`Neos.Flow.http.trustedProxies.proxies` or the environment variable `FLOW_HTTP_TRUSTED_PROXIES`, a list of proxy addresses or CIDR ranges) — **never `'*'`**, which trusts every sender and lets clients spoof their address with an `X-Forwarded-For` header. If Flow cannot determine a client address the request is denied.
+>
 > **Note on ddev:** Requests from the host arrive at PHP with a Docker bridge IP (`172.x.x.x`), not your machine's actual IP. The `172.16.0.0/12` CIDR covers the entire Docker bridge range and is the recommended way to allow local ddev access.
 
 **2. Configure MCP (example for Claude Code)** (`~/.claude.json`):
@@ -242,6 +244,46 @@ Response: `{"copied": {…}, "warnings": [...]}` — warns if the node name or t
 
 ---
 
+### `create_node_variant`
+Creates a variant of an existing node in other content dimensions, e.g. a translation. The variant keeps the **identifier** of the original (`Context::adoptNode`), so dimension and language menus link both together — unlike `create_node` or `copy_node`, which create a new node with a new identifier. Content child nodes (including hidden ones) are copied along, sub-documents are not: create the variants of the parent documents first.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodeIdentifier` | string | ✓ | UUID of the node to create a variant of |
+| `targetDimensions` | object | ✓ | Dimensions of the variant. **Every configured dimension is required**, e.g. `{"region":["north"],"language":["en"]}`; the combination must be allowed by the dimension constraints |
+| `sourceDimensions` | object | | Dimensions to locate the original in (default: ContentRepository default — see [Content Dimensions](#content-dimensions)) |
+| `workspaceName` | string | | Workspace to create the variant in (default: `live`) |
+| `responseProperties` | array | | Fields of the variant (default: `identifier` only) |
+
+Response: `{"variant": {…}, "created": true, "dimensions": {…}}`. The call is idempotent: if the variant already exists, `created` is `false`. A node that is only reachable through a dimension fallback does not count as an existing variant. The tool returns an `Error: …` message if a dimension is missing or unknown, if the combination is not allowed by the constraints, or if the parent node has no variant in the target dimensions yet.
+
+The variant starts with the properties of the original. Translate them afterwards with `update_property` / `batch_update_property` (including `uriPathSegment` for documents) using the target dimensions.
+
+---
+
+### `get_node_variants`
+Lists the dimension combinations a node exists in. With `missingAlong` the response also lists the variants that are still missing along one dimension, limited to the presets that are allowed by the dimension constraints in combination with the other dimensions of the node.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `nodeIdentifier` | string | ✓ | UUID of the node |
+| `dimensions` | object | | Dimensions to locate the node in (default: ContentRepository default) |
+| `workspaceName` | string | | Workspace (default: `live`) |
+| `missingAlong` | string | | Dimension name to list missing variants for, e.g. `language` |
+
+```jsonc
+// Response for {"nodeIdentifier": "…", "missingAlong": "language"}
+{
+  "identifier": "…",
+  "variants": [{ "dimensions": { "language": ["de"], "region": ["north"] } }],
+  "missing": [{ "region": ["north"], "language": ["en"] }]
+}
+```
+
+Each `missing` entry can be passed unchanged as `targetDimensions` to `create_node_variant`.
+
+---
+
 ### `move_node`
 Moves a node including its subtree (`Node::moveInto/moveBefore/moveAfter`); also used to reorder siblings. Identifiers stay the same. When a document node is moved to a new parent, Neos keeps its `uriPathSegment` unique.
 
@@ -339,12 +381,13 @@ Response: `{"count": n, "nodeTypes": [{"name", "label", "abstract", "final", "su
 ---
 
 ### `publish_nodes`
-Publishes nodes from a user workspace to the base workspace (usually `live`).
+Publishes nodes from a user workspace to the base workspace (usually `live`). Publishing a document also publishes its content children; sub-documents must be listed explicitly.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `nodeIdentifiers` | array | ✓ | UUIDs of nodes to publish |
 | `workspaceName` | string | ✓ | Source workspace |
+| `dimensions` | object | | Content dimensions to resolve the nodes in — required to publish variants in non-default dimensions (see [Content Dimensions](#content-dimensions)) |
 | `responseProperties` | array | | Fields per node (default: `identifier` only) |
 
 ---
@@ -467,7 +510,7 @@ Neos adjusts some values on write — e.g. it makes the `uriPathSegment` of docu
 
 ## Content Dimensions
 
-The node-resolving tools (`get_node`, `get_children`, `create_node`, `batch_create_nodes`, `copy_node`, `move_node`, `delete_node`, `update_property`, `batch_update_property`, `list_node_types` with `allowedUnderNodeIdentifier`) and the Elasticsearch-based tools (`search_nodes`, `find_by_property`) build their `ContentContext` from the site's content dimension configuration.
+The node-resolving tools (`get_node`, `get_children`, `create_node`, `batch_create_nodes`, `copy_node`, `move_node`, `delete_node`, `update_property`, `batch_update_property`, `get_node_variants`, `publish_nodes`, `list_node_types` with `allowedUnderNodeIdentifier`; `create_node_variant` as `sourceDimensions`) and the Elasticsearch-based tools (`search_nodes`, `find_by_property`) build their `ContentContext` from the site's content dimension configuration.
 
 - **No `dimensions` argument (default):** the tools do **not** set any dimensions, so the `ContentContextFactory` automatically applies the configured `Neos.ContentRepository.contentDimensions` defaults (e.g. `language` → its `default` preset). This means you get the site's primary dimension out of the box without any package configuration.
 - **Explicit `dimensions` override:** pass an object mapping each dimension to its value(s), e.g. `{"language":["en"]}`, to resolve nodes in another dimension. `targetDimensions` are derived automatically from the first value of each dimension. For `search_nodes` / `find_by_property` the target dimensions also select the dimension-specific Elasticsearch index, so query and node resolution always use the same dimensions.
@@ -480,7 +523,16 @@ The node-resolving tools (`get_node`, `get_children`, `create_node`, `batch_crea
 { "nodeIdentifier": "…", "dimensions": { "language": ["en"] }, "responseProperties": ["title"] }
 ```
 
-> `publish_nodes` always operates on the ContentRepository default dimension and does not accept a `dimensions` argument.
+> `publish_nodes` accepts the same `dimensions` argument. Without it, nodes are resolved in the default dimensions and variants in other dimensions cannot be published.
+
+### Translating content (variants)
+
+Nodes in other dimensions (e.g. translations) are variants of the same node and share its identifier. `create_node` and `copy_node` create *new* nodes and therefore cannot be used for this. Typical flow, in a user workspace:
+
+1. `get_node_variants` with `missingAlong` (e.g. `language`) → the variants still missing, already filtered by the dimension constraints.
+2. `create_node_variant` for each entry of `missing` (use it as `targetDimensions`). Create the variants of parent documents first.
+3. `batch_update_property` with the target `dimensions` to translate properties, including `uriPathSegment` for documents.
+4. `publish_nodes` with the target `dimensions` for the document (its content children are published along).
 
 ---
 
