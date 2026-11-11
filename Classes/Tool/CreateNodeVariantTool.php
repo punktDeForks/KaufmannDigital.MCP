@@ -111,8 +111,9 @@ class CreateNodeVariantTool implements ToolInterface
             return $this->response($existingVariant, false, $args['responseProperties'] ?? null);
         }
 
+        // The root node and the "/sites" node exist without content dimensions and never get variants of their own
         $parent = $node->getParent();
-        if ($parent !== null && $parent->getPath() !== '/') {
+        if ($parent !== null && $parent->getPath() !== '/' && $parent->getDimensions() !== []) {
             $parentVariant = $targetContext->getNodeByIdentifier($parent->getIdentifier());
             if ($parentVariant === null || !$parentVariant->dimensionsAreMatchingTargetDimensionValues()) {
                 return [['type' => 'text', 'text' => sprintf(
