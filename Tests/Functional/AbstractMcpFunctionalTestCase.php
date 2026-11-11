@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KaufmannDigital\MCP\Tests\Functional;
 
 use Neos\ContentRepository\Domain\Factory\NodeFactory;
+use Neos\ContentRepository\Domain\Model\NodeData;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Model\Workspace;
 use Neos\ContentRepository\Domain\Repository\ContentDimensionRepository;
@@ -67,7 +68,7 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
     }
 
     /**
-     * Creates /mcp-test (Document) -> article (Document) -> main (ContentCollection) -> text, hiddenText in region=north, language=de.
+     * Creates /sites (dimensionless, like in a standard installation) -> mcp-test (Document) -> article (Document) -> main (ContentCollection) -> text, hiddenText in region=north, language=de.
      *
      * @return array{site: NodeInterface, article: NodeInterface, text: NodeInterface, hiddenText: NodeInterface}
      */
@@ -77,7 +78,7 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
         $documentType = $nodeTypeManager->getNodeType('KaufmannDigital.MCP:Testing.Document');
         $textType = $nodeTypeManager->getNodeType('KaufmannDigital.MCP:Testing.Text');
 
-        $site = $this->sourceContext->getRootNode()->createNode('mcp-test', $documentType);
+        $site = $this->createSitesNode()->createNode('mcp-test', $documentType);
         $article = $site->createNode('article', $documentType);
         $main = $article->getNode('main');
         $text = $main->createNode('text', $textType);
@@ -95,6 +96,18 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
         $this->persistAndReset();
 
         return array_map(fn(string $identifier) => $this->sourceContext->getNodeByIdentifier($identifier), $identifiers);
+    }
+
+    /**
+     * The "/sites" node of a standard installation exists without content dimensions.
+     */
+    private function createSitesNode(): NodeInterface
+    {
+        $sitesData = new NodeData('/sites', $this->sourceContext->getWorkspace(), null, []);
+        $this->objectManager->get(NodeDataRepository::class)->add($sitesData);
+        $this->persistAndReset();
+
+        return $this->sourceContext->getNode('/sites');
     }
 
     /**
