@@ -246,7 +246,7 @@ Response: `{"copied": {…}, "warnings": [...]}` — warns if the node name or t
 ---
 
 ### `create_node_variant`
-Creates a variant of an existing node in other content dimensions, e.g. a translation. The variant keeps the **identifier** of the original (`Context::adoptNode`), so dimension and language menus link both together — unlike `create_node` or `copy_node`, which create a new node with a new identifier. Content child nodes (including hidden ones) are copied along, sub-documents are not: create the variants of the parent documents first.
+Creates a variant of an existing node in other content dimensions, e.g. a translation. The variant keeps the **identifier** of the original (`Context::adoptNode`), so dimension and language menus link both together — unlike `create_node` or `copy_node`, which create a new node with a new identifier. Content child nodes (including hidden ones) are copied along, sub-documents are not: create the variants of the parent documents first. Along a dimension fallback chain, content children that already resolve through the fallback are not copied but stay shared with the fallback variant until they are edited in the target dimensions.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -258,7 +258,7 @@ Creates a variant of an existing node in other content dimensions, e.g. a transl
 
 Response: `{"variant": {…}, "created": true, "dimensions": {…}}`. The call is idempotent: if the variant already exists, `created` is `false`. A node that is only reachable through a dimension fallback does not count as an existing variant. The tool returns an `Error: …` message if a dimension is missing or unknown, if the combination is not allowed by the constraints, or if the parent node has no variant in the target dimensions yet.
 
-The variant starts with the properties of the original. Translate them afterwards with `update_property` / `batch_update_property` (including `uriPathSegment` for documents) using the target dimensions.
+The variant starts with the properties of the node as it resolves in `sourceDimensions`; with dimension fallbacks that can be the fallback node and not the node in the exact source combination. Translate them afterwards with `update_property` / `batch_update_property` (including `uriPathSegment` for documents) using the target dimensions.
 
 ---
 
@@ -281,7 +281,7 @@ Lists the dimension combinations a node exists in. With `missingAlong` the respo
 }
 ```
 
-Each `missing` entry can be passed unchanged as `targetDimensions` to `create_node_variant`.
+Each `missing` entry can be passed unchanged as `targetDimensions` to `create_node_variant`. If the dimensions of the located node are not a valid combination (any more), `missing` is replaced by a `missingError` message and `variants` is still returned. In a user workspace, variants that were removed there are not listed.
 
 ---
 

@@ -50,9 +50,10 @@ class CreateNodeVariantTool implements ToolInterface
                 . 'The variant keeps the identity (identifier) of the original, so dimension and language menus link both together — '
                 . 'unlike create_node or copy_node, which create a new node with a new identifier. '
                 . 'Content child nodes (including hidden ones) are copied along, sub-documents are not: create variants of the parent documents first. '
+                . 'Along a dimension fallback chain, content children that already resolve through the fallback are not copied but stay shared until edited. '
                 . 'ALL configured dimensions must be given in "targetDimensions" and the combination must be allowed by the dimension constraints. '
                 . 'The call is idempotent: if the variant already exists, "created" is false. '
-                . 'The variant starts with the properties of the original; translate them afterwards with update_property or batch_update_property '
+                . 'The variant starts with the properties of the node as it resolves in sourceDimensions (with dimension fallbacks that can be the fallback node); translate them afterwards with update_property or batch_update_property '
                 . '(including uriPathSegment for documents) using the target dimensions.',
             'inputSchema' => [
                 'type' => 'object',
