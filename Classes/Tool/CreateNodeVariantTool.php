@@ -60,8 +60,7 @@ class CreateNodeVariantTool implements ToolInterface
                     'nodeIdentifier' => ['type' => 'string', 'description' => 'UUID of the node to create a variant of'],
                     'targetDimensions' => [
                         'type' => 'object',
-                        'description' => 'Dimensions of the variant to create. Every configured dimension is required, e.g. {"region":["north"],"language":["en"]}. '
-                            . $this->dimensionsDescription(),
+                        'description' => 'Dimensions of the variant to create. ' . $this->requiredDimensionsDescription(),
                     ],
                     'sourceDimensions' => $this->dimensionsInputSchema(),
                     'workspaceName' => ['type' => 'string', 'description' => 'Workspace to create the variant in (default: live)'],

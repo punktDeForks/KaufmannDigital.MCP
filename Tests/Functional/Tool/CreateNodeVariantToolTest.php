@@ -24,6 +24,19 @@ class CreateNodeVariantToolTest extends AbstractMcpFunctionalTestCase
     /**
      * @test
      */
+    public function targetDimensionsSchemaDescribesRequiredDimensionsWithoutContradiction(): void
+    {
+        $description = $this->tool->getDefinition()['inputSchema']['properties']['targetDimensions']['description'];
+
+        self::assertStringContainsString('Required:', $description);
+        self::assertStringNotContainsString('Optional', $description);
+        self::assertStringNotContainsString('defaults to', $description);
+        self::assertStringContainsString('language', $description);
+    }
+
+    /**
+     * @test
+     */
     public function createsVariantWithSameIdentifier(): void
     {
         $fixture = $this->createArticleFixture();

@@ -43,9 +43,40 @@ trait DimensionOverrideTrait
      */
     protected function dimensionsDescription(): string
     {
+        $details = $this->describeConfiguredDimensions();
+        if ($details === null) {
+            return 'Content dimensions override. No content dimensions are configured on this installation — omit this argument.';
+        }
+
+        return 'Content dimensions to resolve nodes in, e.g. ' . $details['example'] . '. '
+            . 'Optional — defaults to the ContentRepository default dimensions (' . $details['defaults'] . '). '
+            . $details['available']
+            . 'Pass this only to operate on content stored under a non-default dimension.';
+    }
+
+    /**
+     * Description of a "dimensions" argument that must always be given completely (a value for every configured dimension).
+     *
+     * @return string
+     */
+    protected function requiredDimensionsDescription(): string
+    {
+        $details = $this->describeConfiguredDimensions();
+        if ($details === null) {
+            return 'No content dimensions are configured on this installation, so this tool cannot be used.';
+        }
+
+        return 'Required: a value for every configured dimension, e.g. ' . $details['example'] . '. ' . $details['available'];
+    }
+
+    /**
+     * @return array{example: string, defaults: string, available: string}|null null if no dimensions are configured
+     */
+    private function describeConfiguredDimensions(): ?array
+    {
         $dimensions = is_array($this->configuredContentDimensions) ? $this->configuredContentDimensions : [];
         if ($dimensions === []) {
-            return 'Content dimensions override. No content dimensions are configured on this installation — omit this argument.';
+            return null;
         }
 
         $example = [];
@@ -71,11 +102,11 @@ trait DimensionOverrideTrait
             }
         }
 
-        return 'Content dimensions to resolve nodes in, e.g. '
-            . json_encode($example, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '. '
-            . 'Optional — defaults to the ContentRepository default dimensions (' . implode(', ', $defaults) . '). '
-            . ($available !== [] ? 'Available values per dimension: ' . implode('; ', $available) . '. ' : '')
-            . 'Pass this only to operate on content stored under a non-default dimension.';
+        return [
+            'example' => json_encode($example, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'defaults' => implode(', ', $defaults),
+            'available' => $available !== [] ? 'Available values per dimension: ' . implode('; ', $available) . '. ' : '',
+        ];
     }
 
     /**
