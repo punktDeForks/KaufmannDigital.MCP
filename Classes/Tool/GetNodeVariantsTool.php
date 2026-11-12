@@ -35,7 +35,8 @@ class GetNodeVariantsTool implements ToolInterface
             'description' => 'List the dimension combinations a node exists in (its variants, e.g. translations). '
                 . 'With "missingAlong" (a dimension name, e.g. "language") the response also lists the variants that are still missing along that dimension: '
                 . 'all presets of that dimension that are allowed by the dimension constraints in combination with the other dimensions of the node. '
-                . 'Each "missing" entry can be used directly as "targetDimensions" of create_node_variant.',
+                . 'Each "missing" entry can be used directly as "targetDimensions" of create_node_variant. '
+                . 'If the dimensions of the located node are not a valid combination (any more), "missing" is replaced by a "missingError" message and the variants are still listed.',
             'inputSchema' => [
                 'type' => 'object',
                 'properties' => [
@@ -67,12 +68,17 @@ class GetNodeVariantsTool implements ToolInterface
             return [['type' => 'text', 'text' => 'Node not found: ' . $nodeIdentifier]];
         }
 
-        // The same variant can be stored in several workspaces (base workspace and user workspace): list each combination once
+        // The same variant can be stored in several workspaces (base workspace and user workspace): list each combination once.
+        // A variant that was removed in the requested workspace does not exist there any more, even if the base workspace still has it.
+        $workspaceName = $args['workspaceName'] ?? 'live';
         $variants = [];
         foreach (array_merge([$node], array_values($node->getOtherNodeVariants())) as $variant) {
             $dimensions = $variant->getDimensions();
             ksort($dimensions);
-            $variants[json_encode($dimensions)] = ['dimensions' => $dimensions];
+            $key = json_encode($dimensions);
+            if (!isset($variants[$key]) && $this->existsInWorkspace($nodeIdentifier, $dimensions, $workspaceName)) {
+                $variants[$key] = ['dimensions' => $dimensions];
+            }
         }
         ksort($variants);
         $result = ['identifier' => $nodeIdentifier, 'variants' => array_values($variants)];
@@ -80,13 +86,38 @@ class GetNodeVariantsTool implements ToolInterface
         $missingAlong = $args['missingAlong'] ?? null;
         if ($missingAlong !== null && $missingAlong !== '') {
             try {
-                $result['missing'] = $this->missingVariants($node->getDimensions(), (string)$missingAlong, array_keys($variants));
+                $this->dimensionTargetResolver->assertDimensionConfigured((string)$missingAlong);
             } catch (DimensionResolutionException $exception) {
                 return [['type' => 'text', 'text' => 'Error: ' . $exception->getMessage()]];
+            }
+            try {
+                $result['missing'] = $this->missingVariants($node->getDimensions(), (string)$missingAlong, array_keys($variants));
+            } catch (DimensionResolutionException $exception) {
+                // The node itself is stored in a combination that is not valid (any more): keep the variants, explain the gap
+                $result['missingError'] = $exception->getMessage();
             }
         }
 
         return [['type' => 'text', 'text' => json_encode($result, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)]];
+    }
+
+    /**
+     * Looks the node up with exactly these dimensions: removed nodes are hidden by the context, nodes that only resolve through a dimension fallback do not count.
+     *
+     * @param array<string, array<int, string>> $dimensions
+     */
+    private function existsInWorkspace(string $nodeIdentifier, array $dimensions, string $workspaceName): bool
+    {
+        $context = $this->contentContextFactory->create([
+            'workspaceName' => $workspaceName,
+            'dimensions' => $dimensions,
+            'targetDimensions' => array_map(static fn(array $values) => $values[0] ?? null, $dimensions),
+            'invisibleContentShown' => true,
+            'inaccessibleContentShown' => true,
+        ]);
+        $existing = $context->getNodeByIdentifier($nodeIdentifier);
+
+        return $existing !== null && $existing->dimensionsAreMatchingTargetDimensionValues();
     }
 
     /**

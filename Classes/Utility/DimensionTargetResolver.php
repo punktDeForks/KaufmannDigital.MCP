@@ -118,15 +118,24 @@ class DimensionTargetResolver
      */
     public function allowedPresetsAlong(string $dimensionName, array $fixedPresets): array
     {
+        $this->assertDimensionConfigured($dimensionName);
         $allowed = $this->contentDimensionPresetSource->getAllowedDimensionPresetsAccordingToPreselection($dimensionName, $fixedPresets);
-        if ($allowed === null) {
+
+        return $allowed[$dimensionName]['presets'] ?? [];
+    }
+
+    /**
+     * @throws DimensionResolutionException if no dimension with this name is configured
+     */
+    public function assertDimensionConfigured(string $dimensionName): void
+    {
+        $configuredNames = array_keys($this->contentDimensionPresetSource->getAllPresets());
+        if (!in_array($dimensionName, $configuredNames, true)) {
             throw new DimensionResolutionException(sprintf(
                 'Unknown dimension(s): %s. Configured dimensions: %s',
                 $dimensionName,
-                implode(', ', array_keys($this->contentDimensionPresetSource->getAllPresets()))
+                implode(', ', $configuredNames)
             ));
         }
-
-        return $allowed[$dimensionName]['presets'];
     }
 }
