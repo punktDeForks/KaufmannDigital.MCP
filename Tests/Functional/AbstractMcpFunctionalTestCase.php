@@ -45,11 +45,12 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
 
     protected function tearDown(): void
     {
-        parent::tearDown();
+        // Restore the dimension configuration first, so it is restored even if the parent tearDown fails
         $this->inject($this->contextFactory, 'contextInstances', []);
         $configuredDimensions = $this->objectManager->get(ConfigurationManager::class)
             ->getConfiguration(ConfigurationManager::CONFIGURATION_TYPE_SETTINGS, 'Neos.ContentRepository.contentDimensions');
         $this->applyDimensionConfiguration($configuredDimensions);
+        parent::tearDown();
     }
 
     /**
@@ -126,7 +127,7 @@ abstract class AbstractMcpFunctionalTestCase extends FunctionalTestCase
     /**
      * @param array<string, mixed> $configuration
      */
-    private function applyDimensionConfiguration(array $configuration): void
+    protected function applyDimensionConfiguration(array $configuration): void
     {
         $this->objectManager->get(ContentDimensionRepository::class)->setDimensionsConfiguration($configuration);
         // Use the implementation bound to the interface: an installation may replace the default preset source
