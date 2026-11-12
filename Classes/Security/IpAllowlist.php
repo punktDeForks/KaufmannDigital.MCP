@@ -14,17 +14,18 @@ final class IpAllowlist
      */
     public static function isAllowed(string $ip, array $allowedEntries): bool
     {
-        if (filter_var($ip, FILTER_VALIDATE_IP) === false) {
+        $ipBinary = self::pack($ip);
+        if ($ipBinary === null) {
             return false;
         }
 
         foreach ($allowedEntries as $entry) {
             $entry = (string)$entry;
             if (str_contains($entry, '/')) {
-                if (self::matchesCidr($ip, $entry)) {
+                if (self::matchesCidr($ipBinary, $entry)) {
                     return true;
                 }
-            } elseif ($ip === $entry) {
+            } elseif (self::pack($entry) === $ipBinary) {
                 return true;
             }
         }
@@ -32,7 +33,27 @@ final class IpAllowlist
         return false;
     }
 
-    private static function matchesCidr(string $ip, string $cidr): bool
+    /**
+     * Binary form of an IP address, independent of its notation. IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) are
+     * reduced to their IPv4 form, so both spellings of the same client match the same allowlist entry.
+     */
+    private static function pack(string $address): ?string
+    {
+        if (filter_var($address, FILTER_VALIDATE_IP) === false) {
+            return null;
+        }
+        $binary = inet_pton($address);
+        if ($binary === false) {
+            return null;
+        }
+        if (strlen($binary) === 16 && str_starts_with($binary, str_repeat("\x00", 10) . "\xff\xff")) {
+            return substr($binary, 12);
+        }
+
+        return $binary;
+    }
+
+    private static function matchesCidr(string $ipBinary, string $cidr): bool
     {
         [$subnet, $prefixLength] = explode('/', $cidr, 2);
         if (!ctype_digit($prefixLength)) {
@@ -40,9 +61,8 @@ final class IpAllowlist
         }
         $prefixLength = (int)$prefixLength;
 
-        $ipBinary = inet_pton($ip);
-        $subnetBinary = inet_pton($subnet);
-        if ($ipBinary === false || $subnetBinary === false || strlen($ipBinary) !== strlen($subnetBinary)) {
+        $subnetBinary = self::pack($subnet);
+        if ($subnetBinary === null || strlen($ipBinary) !== strlen($subnetBinary)) {
             return false;
         }
 

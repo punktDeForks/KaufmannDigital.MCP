@@ -73,4 +73,33 @@ class IpAllowlistTest extends UnitTestCase
         self::assertFalse(IpAllowlist::isAllowed('10.0.0.1', ['10.0.0.0/-1']));
         self::assertFalse(IpAllowlist::isAllowed('10.0.0.1', ['10.0.0.0/abc']));
     }
+
+    /**
+     * @test
+     */
+    public function exactIpv6IsComparedIndependentOfNotation(): void
+    {
+        self::assertTrue(IpAllowlist::isAllowed('::1', ['0:0:0:0:0:0:0:1']));
+        self::assertTrue(IpAllowlist::isAllowed('2001:db8::1', ['2001:0DB8:0000:0000:0000:0000:0000:0001']));
+        self::assertFalse(IpAllowlist::isAllowed('2001:db8::2', ['2001:db8::1']));
+    }
+
+    /**
+     * @test
+     */
+    public function ipv4MappedIpv6AddressMatchesIpv4Entries(): void
+    {
+        self::assertTrue(IpAllowlist::isAllowed('::ffff:10.0.0.1', ['10.0.0.1']));
+        self::assertTrue(IpAllowlist::isAllowed('::ffff:10.0.0.1', ['10.0.0.0/8']));
+        self::assertTrue(IpAllowlist::isAllowed('10.0.0.1', ['::ffff:10.0.0.1']));
+        self::assertFalse(IpAllowlist::isAllowed('::ffff:11.0.0.1', ['10.0.0.0/8']));
+    }
+
+    /**
+     * @test
+     */
+    public function unparsableEntriesNeverMatch(): void
+    {
+        self::assertFalse(IpAllowlist::isAllowed('10.0.0.1', ['10.0.0', 'garbage', 'garbage/8', '']));
+    }
 }
